@@ -1,3 +1,17 @@
 <resources>
     <string name="app_name">Security Camera</string>
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="show">Show</string>
+    <string name="login_btn">Login</string>
+    <string name="sign_in_with_google">Sign in with Google</string>
+    <string name="forgotPassword">Forgot password?</string>
+    <string name="passoword_reset_email_sent">Please follow instructions sent to</string>
+    <string name="please_enter_forgot">Please enter email you user to register.</string>
+    <string name="register">Register</string>
+    <string name="login">Login</string>
+    <string name="name">Name</string>
+    <string name="confirm_password">Confirm Password</string>
+    <string name="reset">Reset</string>
+    <string name="back">Back</string>
 </resources>

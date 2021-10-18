@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "890583654087",
+    "project_id": "security-camera-3a816",
+    "storage_bucket": "security-camera-3a816.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:890583654087:android:a1af7648549ddaf6a268e2",
+        "android_client_info": {
+          "package_name": "com.petja.securitycamera"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "890583654087-u6ajrfb8v6a76ejp05dh43k3dijarbvk.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBDZCti83yOUdykFP37W92LR4vCz7fCGsc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "890583654087-u6ajrfb8v6a76ejp05dh43k3dijarbvk.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
