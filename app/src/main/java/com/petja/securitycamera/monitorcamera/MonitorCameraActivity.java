@@ -1,26 +1,18 @@
 package com.petja.securitycamera.monitorcamera;
 
-import android.Manifest;
 import android.app.Activity;
-import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
 
 import androidx.annotation.Nullable;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 
 import com.petja.securitycamera.R;
 import com.petja.securitycamera.SimpleSdpObserver;
 
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.webrtc.AudioSource;
 import org.webrtc.AudioTrack;
-import org.webrtc.Camera1Enumerator;
-import org.webrtc.Camera2Enumerator;
-import org.webrtc.CameraEnumerator;
 import org.webrtc.DataChannel;
 import org.webrtc.DefaultVideoDecoderFactory;
 import org.webrtc.DefaultVideoEncoderFactory;
@@ -32,10 +24,7 @@ import org.webrtc.PeerConnection;
 import org.webrtc.PeerConnectionFactory;
 import org.webrtc.RtpReceiver;
 import org.webrtc.SessionDescription;
-import org.webrtc.SurfaceTextureHelper;
 import org.webrtc.SurfaceViewRenderer;
-import org.webrtc.VideoCapturer;
-import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
 
 import java.nio.ByteBuffer;
@@ -50,16 +39,12 @@ public class MonitorCameraActivity extends Activity {
     private PeerConnectionFactory factory;
     public PeerConnection peerConnection;
     private EglBase rootEglBase;
-    private VideoTrack videoTrackFromCamera;
 
-    MediaConstraints audioConstraints;
-    AudioSource audioSource;
-    AudioTrack localAudioTrack;
+    private AudioTrack remoteAudioTrack;
+    private VideoTrack remoteVideoTrack;
 
-    SignalingServer signalingServer;
-
+    MonitorSignalingServer signalingServer;
     Button switchCameraButton;
-
     DataChannel dataChannel;
 
     @Override
@@ -71,12 +56,12 @@ public class MonitorCameraActivity extends Activity {
 
         switchCameraButton.setOnClickListener(view -> switchCamera());
 
-        signalingServer = new SignalingServer(this);
+        signalingServer = new MonitorSignalingServer(this);
         connectToSecurityCamera();
     }
 
     private void switchCamera() {
-        if(dataChannel != null && dataChannel.state() == DataChannel.State.OPEN) {
+        if (dataChannel != null && dataChannel.state() == DataChannel.State.OPEN) {
             dataChannel.send(new DataChannel.Buffer(ByteBuffer.wrap("switch_camera".getBytes()), false));
             Log.d(TAG, "Sent data");
         } else {
@@ -98,6 +83,7 @@ public class MonitorCameraActivity extends Activity {
         ArrayList<PeerConnection.IceServer> iceServers = new ArrayList<>();
         String URL = "stun:stun.l.google.com:19302";
         iceServers.add(PeerConnection.IceServer.builder(URL).createIceServer());
+        // iceServers.add(PeerConnection.IceServer.builder("turn:91.143.218.142:3478").createIceServer());
 
         PeerConnection.RTCConfiguration rtcConfig = new PeerConnection.RTCConfiguration(iceServers);
         MediaConstraints pcConstraints = new MediaConstraints();
@@ -135,7 +121,7 @@ public class MonitorCameraActivity extends Activity {
                     message.put("candidate", iceCandidate.sdp);
 
                     Log.d(TAG, "onIceCandidate: sending candidate " + message);
-                    signalingServer.sendMessage(message);
+                    signalingServer.sendMessageAction(message);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -149,11 +135,18 @@ public class MonitorCameraActivity extends Activity {
             @Override
             public void onAddStream(MediaStream mediaStream) {
                 Log.d(TAG, "onAddStream: " + mediaStream.videoTracks.size());
-                VideoTrack remoteVideoTrack = mediaStream.videoTracks.get(0);
-                AudioTrack remoteAudioTrack = mediaStream.audioTracks.get(0);
+                if (remoteAudioTrack != null) {
+                    remoteVideoTrack.dispose();
+                }
+                if (remoteVideoTrack != null) {
+                    remoteVideoTrack.dispose();
+                }
+                remoteVideoTrack = mediaStream.videoTracks.get(0);
+                remoteAudioTrack = mediaStream.audioTracks.get(0);
                 remoteAudioTrack.setEnabled(true);
                 remoteVideoTrack.setEnabled(true);
                 remoteVideoTrack.addSink(remoteVideo);
+                //remoteVideo.setMirror(remoteVideoTrack.id().endsWith("FRONT"));
             }
 
             @Override
@@ -217,11 +210,14 @@ public class MonitorCameraActivity extends Activity {
             public void onCreateSuccess(SessionDescription sessionDescription) {
                 Log.d(TAG, "onCreateSuccess: answer " + sessionDescription.toString());
                 peerConnection.setLocalDescription(new SimpleSdpObserver(), sessionDescription);
+                Log.d(TAG, "after setLocal desc");
                 JSONObject message = new JSONObject();
                 try {
                     message.put("type", "answer");
                     message.put("sdp", sessionDescription.description);
-                    signalingServer.sendMessage(message);
+                    Log.d(TAG, "before send answer");
+                    signalingServer.sendMessageAction(message);
+                    Log.d(TAG, "after done answer");
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -252,7 +248,7 @@ public class MonitorCameraActivity extends Activity {
                 try {
                     message.put("type", "offer");
                     message.put("sdp", sessionDescription.description);
-                    signalingServer.sendMessage(message);
+                    signalingServer.sendMessageAction(message);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -264,7 +260,24 @@ public class MonitorCameraActivity extends Activity {
     protected void onStop() {
         super.onStop();
         this.signalingServer.stopServer();
-        peerConnection.close();
-        rootEglBase.release();
+        if (peerConnection != null) {
+            peerConnection.close();
+        }
+        if (rootEglBase != null) {
+            Log.d("petja", "stop");
+            rootEglBase.release();
+        }
+        if (remoteAudioTrack != null) {
+            try {
+                remoteAudioTrack.dispose();
+            } catch (Exception ignored) {
+            }
+        }
+        if (remoteVideoTrack != null) {
+            try {
+                remoteVideoTrack.dispose();
+            } catch (Exception ignored) {
+            }
+        }
     }
 }

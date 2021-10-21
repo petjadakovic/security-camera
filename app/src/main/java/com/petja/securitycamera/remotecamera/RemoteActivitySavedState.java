@@ -17,5 +17,5 @@ public class RemoteActivitySavedState {
     public PeerConnection peerConnection;
     public PeerConnectionFactory factory;
     public RemoteCameraActivity.CameraType cameraType;
-    public SignalingServer signalingServer;
+    public RemoteSignalingServer signalingServer;
 }

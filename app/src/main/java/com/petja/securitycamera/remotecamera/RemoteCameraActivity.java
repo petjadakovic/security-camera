@@ -5,7 +5,6 @@ import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.View;
 import android.widget.Button;
 
 import androidx.annotation.Nullable;
@@ -34,7 +33,6 @@ import org.webrtc.PeerConnectionFactory;
 import org.webrtc.RtpReceiver;
 import org.webrtc.SessionDescription;
 import org.webrtc.SurfaceTextureHelper;
-import org.webrtc.SurfaceViewRenderer;
 import org.webrtc.VideoCapturer;
 import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
@@ -47,12 +45,14 @@ public class RemoteCameraActivity extends Activity {
     private static final String TAG = "petja";
     private static final int RC_CALL = 111;
     public static final String VIDEO_TRACK_ID = "PETJAv0";
-    public static final int VIDEO_RESOLUTION_WIDTH = 1280;
-    public static final int VIDEO_RESOLUTION_HEIGHT = 720;
-    public static final int FPS = 30;
+//    public static final int VIDEO_RESOLUTION_WIDTH = 1280;
+//    public static final int VIDEO_RESOLUTION_HEIGHT = 720;
+    public static final int VIDEO_RESOLUTION_WIDTH = 1920;
+    public static final int VIDEO_RESOLUTION_HEIGHT = 1080;
+    public static final int FPS = 20;
 
 
-    private SurfaceViewRenderer localVideo;
+    private CustomSurfaceViewRenderer localVideo;
     private PeerConnectionFactory factory;
     public PeerConnection peerConnection;
     private EglBase rootEglBase;
@@ -64,7 +64,7 @@ public class RemoteCameraActivity extends Activity {
 
     MediaStream mediaStream;
 
-    SignalingServer signalingServer;
+    RemoteSignalingServer signalingServer;
 
     Button switchCameraButton;
 
@@ -76,13 +76,13 @@ public class RemoteCameraActivity extends Activity {
         setContentView(R.layout.remote_camera);
 
         localVideo = findViewById(R.id.surface_view_local);
-//        localVideo.activity = this;
-//        localVideo.imageView = findViewById(R.id.imageView);
-//        localVideo.textView = findViewById(R.id.text_view);
+        localVideo.activity = this;
+        localVideo.imageView = findViewById(R.id.imageView);
+        localVideo.textView = findViewById(R.id.text_view);
         switchCameraButton = findViewById(R.id.switch_camera);
 
         if(RemoteActivitySavedState.getInstance().cameraType == null) {
-            cameraType = CameraType.BACK;
+            cameraType = CameraType.FRONT;
             RemoteActivitySavedState.getInstance().cameraType = cameraType;
         } else {
             cameraType = RemoteActivitySavedState.getInstance().cameraType;
@@ -90,12 +90,13 @@ public class RemoteCameraActivity extends Activity {
 
         switchCameraButton.setOnClickListener(view -> switchCamera());
 
-        if(RemoteActivitySavedState.getInstance().signalingServer == null) {
-            signalingServer = new SignalingServer(this);
-            RemoteActivitySavedState.getInstance().signalingServer = signalingServer;
-        } else {
-            signalingServer = RemoteActivitySavedState.getInstance().signalingServer;
-        }
+//        if(RemoteActivitySavedState.getInstance().signalingServer == null) {
+//            signalingServer = new SignalingServer(this);
+//            RemoteActivitySavedState.getInstance().signalingServer = signalingServer;
+//        } else {
+//            signalingServer = RemoteActivitySavedState.getInstance().signalingServer;
+//        }
+        signalingServer = new RemoteSignalingServer(this);
         startSecurityCamera();
     }
 
@@ -104,21 +105,23 @@ public class RemoteCameraActivity extends Activity {
             long time = System.currentTimeMillis();
             RemoteActivitySavedState remoteActivitySavedState = RemoteActivitySavedState.getInstance();
             initializeSurfaceViews();
-            if(remoteActivitySavedState.factory == null) {
-                initializePeerConnectionFactory();
-                remoteActivitySavedState.factory = factory;
-            } else {
-                factory = remoteActivitySavedState.factory;
-                Log.d("petja", "setSAved factory");
-            }
+//            if(remoteActivitySavedState.factory == null) {
+//                initializePeerConnectionFactory();
+//                remoteActivitySavedState.factory = factory;
+//            } else {
+//                factory = remoteActivitySavedState.factory;
+//                Log.d("petja", "setSAved factory");
+//            }
+            initializePeerConnectionFactory();
             createVideoTrackFromCameraAndShowIt();
-            if(remoteActivitySavedState.peerConnection == null) {
-                initializePeerConnections();
-                remoteActivitySavedState.peerConnection = peerConnection;
-            } else {
-                peerConnection = remoteActivitySavedState.peerConnection;
-                Log.d("petja", "setSAved peerConnection");
-            }
+//            if(remoteActivitySavedState.peerConnection == null) {
+//                initializePeerConnections();
+//                remoteActivitySavedState.peerConnection = peerConnection;
+//            } else {
+//                peerConnection = remoteActivitySavedState.peerConnection;
+//                Log.d("petja", "setSAved peerConnection");
+//            }
+            initializePeerConnections();
             Log.d("petja", "init Time " + (System.currentTimeMillis() - time));
             new Thread(() -> {
                 signalingServer.connectToServer();
@@ -131,8 +134,10 @@ public class RemoteCameraActivity extends Activity {
         ArrayList<PeerConnection.IceServer> iceServers = new ArrayList<>();
         String URL = "stun:stun.l.google.com:19302";
         iceServers.add(PeerConnection.IceServer.builder(URL).createIceServer());
-
+       // iceServers.add(PeerConnection.IceServer.builder("turn:91.143.218.142:3478").setTlsCertPolicy(PeerConnection.TlsCertPolicy.TLS_CERT_POLICY_INSECURE_NO_CHECK).setUsername("username").setPassword("password").createIceServer());
+        iceServers.add(PeerConnection.IceServer.builder("turn:91.143.218.142:3478?transport=tcp").setTlsCertPolicy(PeerConnection.TlsCertPolicy.TLS_CERT_POLICY_INSECURE_NO_CHECK).setUsername("username").setPassword("password").createIceServer());
         PeerConnection.RTCConfiguration rtcConfig = new PeerConnection.RTCConfiguration(iceServers);
+        Log.d("petja", rtcConfig  + "");
         MediaConstraints pcConstraints = new MediaConstraints();
 
         PeerConnection.Observer pcObserver = new PeerConnection.Observer() {
@@ -168,7 +173,7 @@ public class RemoteCameraActivity extends Activity {
                     message.put("candidate", iceCandidate.sdp);
 
                     Log.d(TAG, "onIceCandidate: sending candidate " + message);
-                    signalingServer.sendMessage(message);
+                    signalingServer.sendMessageAction(message);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -230,6 +235,7 @@ public class RemoteCameraActivity extends Activity {
 
     private void initializePeerConnections() {
         peerConnection = createPeerConnection(factory);
+        Log.d("petja", "" + peerConnection);
     }
 
     private void startStreamingVideo() {
@@ -238,7 +244,7 @@ public class RemoteCameraActivity extends Activity {
         mediaStream.addTrack(localAudioTrack);
         peerConnection.addStream(mediaStream);
         Log.d("petja", "user media");
-        signalingServer.sendMessage("got user media");
+        signalingServer.sendMessageAction("got user media");
     }
 
     private boolean checkPermissions() {
@@ -288,11 +294,13 @@ public class RemoteCameraActivity extends Activity {
             public void onCreateSuccess(SessionDescription sessionDescription) {
                 Log.d(TAG, "onCreateSuccess: answer " + sessionDescription.toString());
                 peerConnection.setLocalDescription(new SimpleSdpObserver(), sessionDescription);
+                Log.d(TAG, "onCreateSuccess: answer set " + sessionDescription.toString());
                 JSONObject message = new JSONObject();
                 try {
                     message.put("type", "answer");
                     message.put("sdp", sessionDescription.description);
-                    signalingServer.sendMessage(message);
+                    signalingServer.sendMessageAction(message);
+                    Log.d(TAG, "onCreateSuccess: answer sent");
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -313,6 +321,7 @@ public class RemoteCameraActivity extends Activity {
         VideoSource videoSource = factory.createVideoSource(videoCapturer.isScreencast());
         videoCapturer.initialize(surfaceTextureHelper, this, videoSource.getCapturerObserver());
         videoCapturer.startCapture(VIDEO_RESOLUTION_WIDTH, VIDEO_RESOLUTION_HEIGHT, FPS);
+        localVideo.setMirror(cameraType == CameraType.FRONT);
 
         videoTrackFromCamera = factory.createVideoTrack(VIDEO_TRACK_ID, videoSource);
         videoTrackFromCamera.setEnabled(true);
@@ -407,7 +416,14 @@ public class RemoteCameraActivity extends Activity {
             peerConnection.close();
         }
         if(rootEglBase != null) {
+            Log.d("petja","stop");
             rootEglBase.release();
+        }
+        if(videoTrackFromCamera != null) {
+            videoTrackFromCamera.dispose();
+        }
+        if(localAudioTrack != null){
+            localAudioTrack.dispose();
         }
     }
 
