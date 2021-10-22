@@ -7,23 +7,49 @@
     android:layout_height="match_parent"
     tools:context=".remotecamera.RemoteCameraActivity">
 
-
-    <Button
-        android:id="@+id/switch_camera"
-        android:layout_width="100dp"
-        android:layout_height="100dp"
-        android:layout_marginBottom="50dp"
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
         android:elevation="2dp"
-        android:scaleType="fitCenter"
-        android:text="Switch Camera"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintLeft_toLeftOf="parent"
-        app:layout_constraintRight_toRightOf="parent" />
+        android:orientation="horizontal"
+        app:layout_constraintBottom_toTopOf="@+id/text_view"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <Button
+            android:id="@+id/switch_camera"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:background="@drawable/ic_rotate"
+            android:scaleType="fitCenter"
+            android:layout_marginRight="30dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintLeft_toLeftOf="parent" />
+
+        <CheckBox
+            android:id="@+id/motionCheckbox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/white"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_marginLeft="30dp"
+            android:buttonTint="@color/checkbox_filter_tint"
+            android:text="@string/motion_alarm"
+            app:layout_constraintBottom_toBottomOf="@+id/text_view"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/switch_camera" />
+    </LinearLayout>
+
+
 
     <com.petja.securitycamera.remotecamera.CustomSurfaceViewRenderer
         android:id="@+id/surface_view_local"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        tools:layout_editor_absoluteX="0dp"
+        tools:layout_editor_absoluteY="-288dp" />
 
     <TextView
         android:id="@+id/text_view"

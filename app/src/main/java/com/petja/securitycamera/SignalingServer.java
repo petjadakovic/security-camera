@@ -30,11 +30,12 @@ public class SignalingServer {
         }
     }
 
-    public void sendMessageAction(Object message) {
+    public void sendMessageAction(Object message, int to) {
         JSONObject jsonObject = new JSONObject();
         try {
             jsonObject.put("action", "message");
             jsonObject.put("message", message);
+            jsonObject.put("to", to);
         } catch (JSONException e) {
             e.printStackTrace();
         }

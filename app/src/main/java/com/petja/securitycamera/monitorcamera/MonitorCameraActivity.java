@@ -7,6 +7,7 @@ import android.widget.Button;
 
 import androidx.annotation.Nullable;
 
+import com.petja.securitycamera.FirebaseManager;
 import com.petja.securitycamera.R;
 import com.petja.securitycamera.SimpleSdpObserver;
 
@@ -33,6 +34,8 @@ import java.util.ArrayList;
 public class MonitorCameraActivity extends Activity {
 
     private static final String TAG = "petja";
+
+    public static int remoteId;
 
 
     private SurfaceViewRenderer remoteVideo;
@@ -76,6 +79,12 @@ public class MonitorCameraActivity extends Activity {
 
         new Thread(() -> {
             signalingServer.connectToServer();
+            JSONObject tokenJSON = new JSONObject();
+            try {
+                tokenJSON.put("token", FirebaseManager.getInstance().getToken());
+            } catch (JSONException ignored) { }
+            signalingServer.sendMessageSync(tokenJSON.toString());
+            doCall();
         }).start();
     }
 
@@ -83,7 +92,7 @@ public class MonitorCameraActivity extends Activity {
         ArrayList<PeerConnection.IceServer> iceServers = new ArrayList<>();
         String URL = "stun:stun.l.google.com:19302";
         iceServers.add(PeerConnection.IceServer.builder(URL).createIceServer());
-        // iceServers.add(PeerConnection.IceServer.builder("turn:91.143.218.142:3478").createIceServer());
+        iceServers.add(PeerConnection.IceServer.builder("turn:3.10.164.245:3478").setUsername("camera").setPassword("camera123").createIceServer());
 
         PeerConnection.RTCConfiguration rtcConfig = new PeerConnection.RTCConfiguration(iceServers);
         MediaConstraints pcConstraints = new MediaConstraints();
@@ -121,7 +130,7 @@ public class MonitorCameraActivity extends Activity {
                     message.put("candidate", iceCandidate.sdp);
 
                     Log.d(TAG, "onIceCandidate: sending candidate " + message);
-                    signalingServer.sendMessageAction(message);
+                    signalingServer.sendMessageAction(message, remoteId);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -216,7 +225,7 @@ public class MonitorCameraActivity extends Activity {
                     message.put("type", "answer");
                     message.put("sdp", sessionDescription.description);
                     Log.d(TAG, "before send answer");
-                    signalingServer.sendMessageAction(message);
+                    signalingServer.sendMessageAction(message, remoteId);
                     Log.d(TAG, "after done answer");
                 } catch (JSONException e) {
                     e.printStackTrace();
@@ -248,7 +257,7 @@ public class MonitorCameraActivity extends Activity {
                 try {
                     message.put("type", "offer");
                     message.put("sdp", sessionDescription.description);
-                    signalingServer.sendMessageAction(message);
+                    signalingServer.sendMessageAction(message, remoteId);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }

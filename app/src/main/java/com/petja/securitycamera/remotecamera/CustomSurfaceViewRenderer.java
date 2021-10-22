@@ -29,8 +29,8 @@ import java.util.HashMap;
 public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
 
     public ImageView imageView;
-    public Activity activity;
     public TextView textView;
+    public RemoteCameraActivity remoteCameraActivity;
 
     int[] lastImage;
 
@@ -46,6 +46,8 @@ public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
     long lastFrameTime;
     long time;
 
+    boolean notifyOnMotion;
+
     int fps;
     long fpsTime;
 
@@ -53,14 +55,22 @@ public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
 
     @Override
     public void onFrame(VideoFrame frame) {
-        //  if(System.currentTimeMillis() < 0) {
-        //    if(System.currentTimeMillis() - lastFrameTime > 500) {
+
+        if(remoteCameraActivity.isPeerConnected()) {
+            super.onFrame(frame);
+            return;
+        }
+
+
         time = System.currentTimeMillis();
         frame.retain();
 
         VideoFrame.I420Buffer i420Buffer = frame.getBuffer().toI420();
         byte[] data = createMyNV21Data(i420Buffer);
-        checkMotion(i420Buffer, data);
+        boolean motionDetected = checkMotion(i420Buffer, data);
+        if(motionDetected && notifyOnMotion) {
+            remoteCameraActivity.signalingServer.sendMotionDetected();
+        }
 
 
         NV21Buffer buffer = new NV21Buffer(data, frame.getBuffer().getWidth(), frame.getBuffer().getHeight(), null);
@@ -76,20 +86,16 @@ public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
         fps++;
         if (System.currentTimeMillis() - fpsTime > 1000) {
             String text = fps + "fps " + res;
-            activity.runOnUiThread(() -> textView.setText(text));
+            remoteCameraActivity.runOnUiThread(() -> textView.setText(text));
             fps = 0;
             fpsTime = System.currentTimeMillis() - System.currentTimeMillis() % 1000;
         }
 
         super.onFrame(videoFrame);
-        //lastFrameTime = System.currentTimeMillis();
-//        } else {
-//            super.onFrame(frame);
-//        }
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
-    private int[] checkMotion(VideoFrame.I420Buffer i420Buffer, byte[] buffer) {
+    private boolean checkMotion(VideoFrame.I420Buffer i420Buffer, byte[] buffer) {
         int width = i420Buffer.getWidth();
         int height = i420Buffer.getHeight();
         boolean checkDiff = lastImage != null && lastImage.length == width * height;
@@ -100,8 +106,9 @@ public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
             for(int i = 0; i < lastImage.length;i++){
                 this.lastImage[i] = Byte.toUnsignedInt(lastImage[i]);
             }
-            return this.lastImage;
+            return false;
         } else {
+            boolean motionDetected = false;
             //ByteBuffer byteBuffer = i420Buffer.getDataY();
             byte[] yData = new byte[width * height];
             // i420Buffer.getDataY().get(yData);
@@ -138,6 +145,7 @@ public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
                     //      if(x == 15000000 && y == 15) {
                     //           if(x % 2 == 0 && y % 2 == 0 || x % 2 == 1 && y % 2 == 1) {
                     if (blockDiff > blockSize * blockSize * 10) {
+                        motionDetected = true;
                         blockLumen = (int) blockDiff;
                         int myY = y * blockSize;
                         if (myY > 0) {
@@ -172,7 +180,7 @@ public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
             int finalBlockLumen = blockLumen;
             //Log.d("petja", "time3: " + (System.currentTimeMillis() - time3) + "ms");
             //activity.runOnUiThread(() -> textView.setText(finalBlockLumen + ""));
-            return lastImage;
+            return motionDetected;
         }
     }
 
@@ -190,7 +198,7 @@ public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
         yuvImage.compressToJpeg(new Rect(0, 0, width, height), 100, out);
         byte[] imageBytes = out.toByteArray();
         Bitmap image = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
-        activity.runOnUiThread(() -> iv.setImageBitmap(image));
+        remoteCameraActivity.runOnUiThread(() -> iv.setImageBitmap(image));
     }
 
     public static byte[] createNV21Data(VideoFrame.I420Buffer i420Buffer) {

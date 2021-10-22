@@ -6,6 +6,9 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
@@ -51,12 +54,15 @@ public class RemoteCameraActivity extends Activity {
     public static final int VIDEO_RESOLUTION_HEIGHT = 1080;
     public static final int FPS = 20;
 
+    public int monitorId;
+
 
     private CustomSurfaceViewRenderer localVideo;
     private PeerConnectionFactory factory;
     public PeerConnection peerConnection;
     private EglBase rootEglBase;
     private VideoTrack videoTrackFromCamera;
+    private CheckBox motionCheckbox;
 
     MediaConstraints audioConstraints;
     AudioSource audioSource;
@@ -64,7 +70,7 @@ public class RemoteCameraActivity extends Activity {
 
     MediaStream mediaStream;
 
-    RemoteSignalingServer signalingServer;
+    public RemoteSignalingServer signalingServer;
 
     Button switchCameraButton;
 
@@ -76,10 +82,11 @@ public class RemoteCameraActivity extends Activity {
         setContentView(R.layout.remote_camera);
 
         localVideo = findViewById(R.id.surface_view_local);
-        localVideo.activity = this;
+        localVideo.remoteCameraActivity = this;
         localVideo.imageView = findViewById(R.id.imageView);
         localVideo.textView = findViewById(R.id.text_view);
         switchCameraButton = findViewById(R.id.switch_camera);
+        motionCheckbox = findViewById(R.id.motionCheckbox);
 
         if(RemoteActivitySavedState.getInstance().cameraType == null) {
             cameraType = CameraType.FRONT;
@@ -88,7 +95,28 @@ public class RemoteCameraActivity extends Activity {
             cameraType = RemoteActivitySavedState.getInstance().cameraType;
         }
 
+        Log.d("petja", "remote oncreate");
+
         switchCameraButton.setOnClickListener(view -> switchCamera());
+
+        motionCheckbox.setOnCheckedChangeListener((compoundButton, b) -> {
+            if(motionCheckbox.isChecked()) {
+                Toast.makeText(getApplicationContext(), "Starting motion detection in 5s", Toast.LENGTH_SHORT).show();
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(5000);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                    if(motionCheckbox.isChecked()) {
+                        localVideo.notifyOnMotion = true;
+                    }
+                }).start();
+            } else {
+                localVideo.notifyOnMotion = false;
+                Toast.makeText(getApplicationContext(), "Motion detection disabled", Toast.LENGTH_SHORT).show();
+            }
+        });
 
 //        if(RemoteActivitySavedState.getInstance().signalingServer == null) {
 //            signalingServer = new SignalingServer(this);
@@ -97,7 +125,9 @@ public class RemoteCameraActivity extends Activity {
 //            signalingServer = RemoteActivitySavedState.getInstance().signalingServer;
 //        }
         signalingServer = new RemoteSignalingServer(this);
+        Log.d("petja", "servet contructrot");
         startSecurityCamera();
+
     }
 
     private void startSecurityCamera() {
@@ -134,8 +164,7 @@ public class RemoteCameraActivity extends Activity {
         ArrayList<PeerConnection.IceServer> iceServers = new ArrayList<>();
         String URL = "stun:stun.l.google.com:19302";
         iceServers.add(PeerConnection.IceServer.builder(URL).createIceServer());
-       // iceServers.add(PeerConnection.IceServer.builder("turn:91.143.218.142:3478").setTlsCertPolicy(PeerConnection.TlsCertPolicy.TLS_CERT_POLICY_INSECURE_NO_CHECK).setUsername("username").setPassword("password").createIceServer());
-        iceServers.add(PeerConnection.IceServer.builder("turn:91.143.218.142:3478?transport=tcp").setTlsCertPolicy(PeerConnection.TlsCertPolicy.TLS_CERT_POLICY_INSECURE_NO_CHECK).setUsername("username").setPassword("password").createIceServer());
+        iceServers.add(PeerConnection.IceServer.builder("turn:3.10.164.245:3478").setUsername("camera").setPassword("camera123").createIceServer());
         PeerConnection.RTCConfiguration rtcConfig = new PeerConnection.RTCConfiguration(iceServers);
         Log.d("petja", rtcConfig  + "");
         MediaConstraints pcConstraints = new MediaConstraints();
@@ -173,7 +202,7 @@ public class RemoteCameraActivity extends Activity {
                     message.put("candidate", iceCandidate.sdp);
 
                     Log.d(TAG, "onIceCandidate: sending candidate " + message);
-                    signalingServer.sendMessageAction(message);
+                    signalingServer.sendMessageAction(message, monitorId);
                 } catch (JSONException e) {
                     e.printStackTrace();
                 }
@@ -212,7 +241,8 @@ public class RemoteCameraActivity extends Activity {
                     public void onMessage(DataChannel.Buffer buffer) {
                         String message = StandardCharsets.UTF_8.decode(buffer.data).toString();
                         if(message.equals("switch_camera")) {
-                            switchCamera();
+                            Log.d("petja", "switch camera");
+                            runOnUiThread(() -> switchCamera());
                         }
                     }
                 });
@@ -221,7 +251,7 @@ public class RemoteCameraActivity extends Activity {
             @Override
             public void onRenegotiationNeeded() {
                 Log.d(TAG, "onRenegotiationNeeded: ");
-                doAnswer();
+                doAnswer(monitorId);
             }
 
             @Override
@@ -244,7 +274,6 @@ public class RemoteCameraActivity extends Activity {
         mediaStream.addTrack(localAudioTrack);
         peerConnection.addStream(mediaStream);
         Log.d("petja", "user media");
-        signalingServer.sendMessageAction("got user media");
     }
 
     private boolean checkPermissions() {
@@ -287,7 +316,7 @@ public class RemoteCameraActivity extends Activity {
         factory = builder.createPeerConnectionFactory();
     }
 
-    public void doAnswer() {
+    public void doAnswer(int callerId) {
         Log.d(TAG, "before do answer");
         peerConnection.createAnswer(new SimpleSdpObserver() {
             @Override
@@ -299,7 +328,7 @@ public class RemoteCameraActivity extends Activity {
                 try {
                     message.put("type", "answer");
                     message.put("sdp", sessionDescription.description);
-                    signalingServer.sendMessageAction(message);
+                    signalingServer.sendMessageAction(message, callerId);
                     Log.d(TAG, "onCreateSuccess: answer sent");
                 } catch (JSONException e) {
                     e.printStackTrace();
@@ -411,20 +440,26 @@ public class RemoteCameraActivity extends Activity {
     @Override
     protected void onStop() {
         super.onStop();
+        Log.d("petja","stop 1");
         this.signalingServer.stopServer();
-        if(peerConnection != null) {
-            peerConnection.close();
-        }
+        Log.d("petja","stop2");
         if(rootEglBase != null) {
-            Log.d("petja","stop");
+            Log.d("petja","stop4");
             rootEglBase.release();
         }
+        Log.d("petja","stop5");
         if(videoTrackFromCamera != null) {
             videoTrackFromCamera.dispose();
         }
+        Log.d("petja","stop6");
         if(localAudioTrack != null){
             localAudioTrack.dispose();
         }
+        if(peerConnection != null) {
+            peerConnection.close();
+            Log.d("petja","stop7");
+        }
+        Log.d("petja","stop8");
     }
 
     private boolean useCamera2() {
@@ -434,5 +469,24 @@ public class RemoteCameraActivity extends Activity {
     enum CameraType {
         FRONT,
         BACK
+    }
+
+    public boolean isPeerConnected() {
+        if(peerConnection == null) {
+            return false;
+        } else {
+            switch (peerConnection.connectionState()){
+                case CONNECTING:
+                case CONNECTED:
+                    return true;
+                case NEW:
+                case DISCONNECTED:
+                case FAILED:
+                case CLOSED:
+                    return false;
+                default:
+                    return false;
+            }
+        }
     }
 }

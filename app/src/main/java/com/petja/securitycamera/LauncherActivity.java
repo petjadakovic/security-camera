@@ -24,8 +24,9 @@ public class LauncherActivity extends Activity {
     }
 
     private boolean isLoggedIn() {
-        FirebaseAuth mAuth = FirebaseAuth.getInstance();
-        FirebaseUser user = mAuth.getCurrentUser();
+        FirebaseManager firebaseManager = new FirebaseManager();
+        firebaseManager.initAuth();
+        FirebaseUser user = firebaseManager.firebaseUser();
         if(user == null) {
             return false;
         }

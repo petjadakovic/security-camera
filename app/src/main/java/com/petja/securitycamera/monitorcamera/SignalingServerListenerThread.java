@@ -47,35 +47,10 @@ public class SignalingServerListenerThread extends Thread {
                 JSONObject jsonObject = new JSONObject(dataMessage);
                 Log.d(TAG, "message " + jsonObject.toString());
                 String action = jsonObject.getString("action");
-                if(action.equals("ipaddr")) {
-                    Log.d(TAG, "connectToSignallingServer: ipaddr");
-                } else if(action.equals("created")) {
-                    Log.d(TAG, "connectToSignallingServer: created");
-                } else if(action.equals("full")) {
-                    Log.d(TAG, "connectToSignallingServer: full");
-                } else if(action.equals("join")) {
-                    Log.d(TAG, "connectToSignallingServer: join");
-                    Log.d(TAG, "connectToSignallingServer: Another peer made a request to join room");
-                    Log.d(TAG, "connectToSignallingServer: This peer is the initiator of room");
-                    monitorCamera.doCall();
-                } else if(action.equals("joined")) {
-                    Log.d(TAG, "connectToSignallingServer: joined");
-                    monitorCamera.doCall();
-                } else if(action.equals("log")) {
-                    JSONArray args = jsonObject.getJSONArray("args");
-                    for (int i = 0;i < args.length(); i++) {
-                        Log.d(TAG, "connectToSignallingServer: " + String.valueOf(args.get(i)));
-                    }
-                } else if(action.equals("message")) {
+                if(action.equals("message")) {
                     Log.d(TAG, "connectToSignallingServer: got a message");
-                    Object arg = jsonObject.get("message");
-                    if(arg instanceof String) {
-                        String message = (String) arg;
-                        if (message.equals("got user media")) {
-                            Log.d(TAG, "before maybe start");
-                        }
-                    } else {
-                        JSONObject message = (JSONObject) arg;
+
+                        JSONObject message = jsonObject;
                         Log.d(TAG, "connectToSignallingServer: got message " + message);
                         if (message.getString("type").equals("offer")) {
                             Log.d(TAG, "connectToSignallingServer: received an offer ");
@@ -94,7 +69,7 @@ public class SignalingServerListenerThread extends Thread {
                             IceCandidate candidate = new IceCandidate(message.getString("id"), message.getInt("label"), message.getString("candidate"));
                             monitorCamera.peerConnection.addIceCandidate(candidate);
                         }
-                    }
+
                 }
             }
         } catch (Exception e) {

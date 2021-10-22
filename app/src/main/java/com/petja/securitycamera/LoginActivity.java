@@ -225,6 +225,7 @@ public class LoginActivity extends Activity {
     }
 
     private void onSuccess() {
+        FirebaseManager.getInstance().initAuth();
         Intent intent = new Intent(LoginActivity.this, MainActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
         startActivity(intent);
@@ -278,6 +279,10 @@ public class LoginActivity extends Activity {
     private void onRegister() {
         if (!confirmPassword.getText().toString().equals(password.getText().toString())) {
             Toast.makeText(getApplicationContext(), "Passwords do not match", Toast.LENGTH_SHORT).show();
+            return;
+        } else if(email.length() == 0 || password.length() == 0) {
+            Toast.makeText(getApplicationContext(), "Passwords do not match", Toast.LENGTH_SHORT).show();
+            return;
         }
         login.setEnabled(false);
         auth.createUserWithEmailAndPassword(email.getText().toString(), password.getText().toString())
