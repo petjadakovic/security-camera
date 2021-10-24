@@ -68,4 +68,8 @@ public class ListAdapter extends RecyclerView.Adapter<ListAdapter.ViewHolder> {
     public int getItemCount() {
         return remoteDevices.length;
     }
+
+    public void clearData() {
+        remoteDevices = new RemoteDevice[0];
+    }
 }

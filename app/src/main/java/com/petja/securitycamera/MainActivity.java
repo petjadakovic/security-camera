@@ -12,6 +12,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -49,8 +50,11 @@ public class MainActivity extends Activity {
     TextView name;
     ImageView menuIcon;
     ImageView userImage;
+    ProgressBar progressBar;
     NavigationView navigationView;
     MainActivity mainActivity;
+
+    ListAdapter listAdapter;
 
     LinearLayout buttons, remotePhones;
     RecyclerView recyclerView;
@@ -78,6 +82,7 @@ public class MainActivity extends Activity {
         recyclerView = findViewById(R.id.recyclerView);
         back = findViewById(R.id.back);
         empty = findViewById(R.id.empty);
+        progressBar = findViewById(R.id.progressBar);
 
         View view = navigationView.getHeaderView(0);
         name = view.findViewById(R.id.name);
@@ -148,6 +153,12 @@ public class MainActivity extends Activity {
     }
 
     private void getPhones() {
+        progressBar.setVisibility(View.VISIBLE);
+        buttons.setVisibility(View.GONE);
+        remotePhones.setVisibility(View.VISIBLE);
+        empty.setVisibility(View.GONE);
+        recyclerView.setAdapter(new ListAdapter(new RemoteDevice[0], mainActivity));
+        recyclerView.setLayoutManager(new LinearLayoutManager(getApplicationContext()));
         new Thread(() -> {
             RemoteDevice[] remoteDevices = null;
             try {
@@ -167,15 +178,12 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (finalRemoteDevices == null || finalRemoteDevices.length == 0) {
                     empty.setVisibility(View.VISIBLE);
-                    recyclerView.setAdapter(new ListAdapter(new RemoteDevice[0], mainActivity));
-                    recyclerView.setLayoutManager(new LinearLayoutManager(getApplicationContext()));
                 } else {
                     empty.setVisibility(View.GONE);
                     recyclerView.setAdapter(new ListAdapter(finalRemoteDevices, mainActivity));
                     recyclerView.setLayoutManager(new LinearLayoutManager(getApplicationContext()));
                 }
-                buttons.setVisibility(View.GONE);
-                remotePhones.setVisibility(View.VISIBLE);
+                progressBar.setVisibility(View.GONE);
             });
         }).start();
     }

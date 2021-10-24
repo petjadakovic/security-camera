@@ -4,6 +4,8 @@
     <option name="filePathToZoomLevelMap">
       <map>
         <entry key="../../../../layout/custom_preview.xml" value="0.27291666666666664" />
+        <entry key="app/src/main/res/drawable/blue_box.xml" value="0.21458333333333332" />
+        <entry key="app/src/main/res/drawable/borderRight.xml" value="0.27291666666666664" />
         <entry key="app/src/main/res/drawable/button_blue.xml" value="0.40520833333333334" />
         <entry key="app/src/main/res/drawable/button_white.xml" value="0.40520833333333334" />
         <entry key="app/src/main/res/drawable/checkbox_filter_tint.xml" value="0.2625" />

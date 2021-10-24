@@ -40,6 +40,7 @@ import org.webrtc.VideoCapturer;
 import org.webrtc.VideoSource;
 import org.webrtc.VideoTrack;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
@@ -69,6 +70,8 @@ public class RemoteCameraActivity extends Activity {
     AudioTrack localAudioTrack;
 
     MediaStream mediaStream;
+
+    DataChannel dataChannel;
 
     public RemoteSignalingServer signalingServer;
 
@@ -109,11 +112,12 @@ public class RemoteCameraActivity extends Activity {
                         e.printStackTrace();
                     }
                     if(motionCheckbox.isChecked()) {
-                        localVideo.notifyOnMotion = true;
+                        enableMotionDetection();
                     }
                 }).start();
             } else {
                 localVideo.notifyOnMotion = false;
+                sendDataChannelMessage("disable_motion_detection");
                 Toast.makeText(getApplicationContext(), "Motion detection disabled", Toast.LENGTH_SHORT).show();
             }
         });
@@ -130,27 +134,48 @@ public class RemoteCameraActivity extends Activity {
 
     }
 
+    private void resetPeerConnection() {
+
+        if(rootEglBase != null) {
+            rootEglBase.release();
+        }
+        if(videoTrackFromCamera != null) {
+            videoTrackFromCamera.dispose();
+        }
+        if(localAudioTrack != null){
+            localAudioTrack.dispose();
+        }
+        localVideo.release();
+
+        try {
+            this.peerConnection.close();
+        }catch (Exception e) {
+            e.printStackTrace();
+        }
+        initializeSurfaceViews();
+        initializePeerConnectionFactory();
+        createVideoTrackFromCameraAndShowIt();
+        initializePeerConnections();
+        startStreamingVideo();
+    }
+
+    public void enableMotionDetection() {
+        localVideo.notifyOnMotion = true;
+        RemoteSignalingServer.lastMotionDetected = 0;
+        try {
+            signalingServer.sendMessage(new JSONObject().put("action", "reset_motion").toString());
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        runOnUiThread(() -> sendDataChannelMessage("enable_motion_detection"));
+    }
+
     private void startSecurityCamera() {
         if(checkPermissions()) {
             long time = System.currentTimeMillis();
-            RemoteActivitySavedState remoteActivitySavedState = RemoteActivitySavedState.getInstance();
             initializeSurfaceViews();
-//            if(remoteActivitySavedState.factory == null) {
-//                initializePeerConnectionFactory();
-//                remoteActivitySavedState.factory = factory;
-//            } else {
-//                factory = remoteActivitySavedState.factory;
-//                Log.d("petja", "setSAved factory");
-//            }
             initializePeerConnectionFactory();
             createVideoTrackFromCameraAndShowIt();
-//            if(remoteActivitySavedState.peerConnection == null) {
-//                initializePeerConnections();
-//                remoteActivitySavedState.peerConnection = peerConnection;
-//            } else {
-//                peerConnection = remoteActivitySavedState.peerConnection;
-//                Log.d("petja", "setSAved peerConnection");
-//            }
             initializePeerConnections();
             Log.d("petja", "init Time " + (System.currentTimeMillis() - time));
             new Thread(() -> {
@@ -169,6 +194,8 @@ public class RemoteCameraActivity extends Activity {
         Log.d("petja", rtcConfig  + "");
         MediaConstraints pcConstraints = new MediaConstraints();
 
+        RemoteCameraActivity remoteCameraActivity = this;
+
         PeerConnection.Observer pcObserver = new PeerConnection.Observer() {
             @Override
             public void onSignalingChange(PeerConnection.SignalingState signalingState) {
@@ -177,7 +204,10 @@ public class RemoteCameraActivity extends Activity {
 
             @Override
             public void onIceConnectionChange(PeerConnection.IceConnectionState iceConnectionState) {
-                Log.d(TAG, "onIceConnectionChange: ");
+                Log.d(TAG, "onIceConnectionChange: " + iceConnectionState);
+                if(iceConnectionState == PeerConnection.IceConnectionState.DISCONNECTED) {
+                    runOnUiThread(() ->  resetPeerConnection());
+                }
             }
 
             @Override
@@ -225,7 +255,8 @@ public class RemoteCameraActivity extends Activity {
 
             @Override
             public void onDataChannel(DataChannel dataChannel) {
-                Log.d(TAG, "onDataChannel: " + dataChannel.bufferedAmount());
+                Log.d(TAG, "onDataChannel: " + dataChannel.bufferedAmount() + " " + dataChannel.label());
+                remoteCameraActivity.dataChannel = dataChannel;
                 dataChannel.registerObserver(new DataChannel.Observer() {
                     @Override
                     public void onBufferedAmountChange(long l) {
@@ -243,14 +274,19 @@ public class RemoteCameraActivity extends Activity {
                         if(message.equals("switch_camera")) {
                             Log.d("petja", "switch camera");
                             runOnUiThread(() -> switchCamera());
+                        } else if(message.equals("enable_motion_detection")) {
+                            runOnUiThread(() -> motionCheckbox.setChecked(true));
+                        } else if(message.equals("disable_motion_detection")) {
+                            runOnUiThread(() -> motionCheckbox.setChecked(false));
                         }
                     }
                 });
+                Log.d(TAG, "onDataChannel: DONE");
             }
 
             @Override
             public void onRenegotiationNeeded() {
-                Log.d(TAG, "onRenegotiationNeeded: ");
+                Log.d(TAG, "onRenegotiationNeeded: " + peerConnection.connectionState());
                 doAnswer(monitorId);
             }
 
@@ -263,7 +299,7 @@ public class RemoteCameraActivity extends Activity {
         return factory.createPeerConnection(rtcConfig, pcConstraints, pcObserver);
     }
 
-    private void initializePeerConnections() {
+    public void initializePeerConnections() {
         peerConnection = createPeerConnection(factory);
         Log.d("petja", "" + peerConnection);
     }
@@ -328,6 +364,7 @@ public class RemoteCameraActivity extends Activity {
                 try {
                     message.put("type", "answer");
                     message.put("sdp", sessionDescription.description);
+                    message.put("motion_detection", localVideo.notifyOnMotion);
                     signalingServer.sendMessageAction(message, callerId);
                     Log.d(TAG, "onCreateSuccess: answer sent");
                 } catch (JSONException e) {
@@ -440,26 +477,31 @@ public class RemoteCameraActivity extends Activity {
     @Override
     protected void onStop() {
         super.onStop();
-        Log.d("petja","stop 1");
-        this.signalingServer.stopServer();
-        Log.d("petja","stop2");
-        if(rootEglBase != null) {
-            Log.d("petja","stop4");
-            rootEglBase.release();
+        try {
+            this.signalingServer.stopServer();
+            if(rootEglBase != null) {
+                rootEglBase.release();
+            }
+            if(videoTrackFromCamera != null) {
+                videoTrackFromCamera.dispose();
+            }
+            if(localAudioTrack != null){
+                localAudioTrack.dispose();
+            }
+            if(peerConnection != null) {
+                peerConnection.close();
+            }
+        }catch (Exception e){
+            e.printStackTrace();
         }
-        Log.d("petja","stop5");
-        if(videoTrackFromCamera != null) {
-            videoTrackFromCamera.dispose();
+    }
+
+    private void sendDataChannelMessage(String message) {
+        Log.d("petja", "before send " + message);
+        if (dataChannel != null && dataChannel.state() == DataChannel.State.OPEN) {
+            dataChannel.send(new DataChannel.Buffer(ByteBuffer.wrap(message.getBytes()), false));
+            Log.d("petja", " sent " + message);
         }
-        Log.d("petja","stop6");
-        if(localAudioTrack != null){
-            localAudioTrack.dispose();
-        }
-        if(peerConnection != null) {
-            peerConnection.close();
-            Log.d("petja","stop7");
-        }
-        Log.d("petja","stop8");
     }
 
     private boolean useCamera2() {

@@ -62,6 +62,13 @@ public class SignalingServerListenerThread extends Thread {
                             Log.d(TAG, monitorCamera.peerConnection.connectionState().toString());
                         } else if (message.getString("type").equals("answer")) {
                             Log.d(TAG, "answer message");
+                            monitorCamera.runOnUiThread(() -> {
+                                try {
+                                    monitorCamera.setMotionCheckbox(message.getBoolean("motion_detection"));
+                                } catch (JSONException e) {
+                                    e.printStackTrace();
+                                }
+                            });
                             monitorCamera.peerConnection.setRemoteDescription(new SimpleSdpObserver(), new SessionDescription(ANSWER, message.getString("sdp")));
                             Log.d(TAG, monitorCamera.peerConnection.connectionState().toString());
                         } else if (message.getString("type").equals("candidate")) {

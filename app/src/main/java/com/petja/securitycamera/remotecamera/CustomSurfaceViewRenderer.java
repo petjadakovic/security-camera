@@ -28,6 +28,8 @@ import java.util.HashMap;
 
 public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
 
+    public static int MOTION_INIT_TIME = 10 * 1000;
+
     public ImageView imageView;
     public TextView textView;
     public RemoteCameraActivity remoteCameraActivity;
@@ -43,8 +45,8 @@ public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
     }
 
     int i = 0;
-    long lastFrameTime;
     long time;
+    long cameraStartTime;
 
     boolean notifyOnMotion;
 
@@ -53,12 +55,19 @@ public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
 
     String res;
 
+
+
     @Override
     public void onFrame(VideoFrame frame) {
 
         if(remoteCameraActivity.isPeerConnected()) {
+            cameraStartTime = 0;
             super.onFrame(frame);
             return;
+        }
+
+        if(cameraStartTime == 0) {
+            cameraStartTime = System.currentTimeMillis();
         }
 
 
@@ -68,7 +77,7 @@ public class CustomSurfaceViewRenderer extends SurfaceViewRenderer {
         VideoFrame.I420Buffer i420Buffer = frame.getBuffer().toI420();
         byte[] data = createMyNV21Data(i420Buffer);
         boolean motionDetected = checkMotion(i420Buffer, data);
-        if(motionDetected && notifyOnMotion) {
+        if(motionDetected && notifyOnMotion && System.currentTimeMillis() - cameraStartTime > MOTION_INIT_TIME) {
             remoteCameraActivity.signalingServer.sendMotionDetected();
         }
 

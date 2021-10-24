@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 
@@ -29,6 +31,7 @@ import org.webrtc.SurfaceViewRenderer;
 import org.webrtc.VideoTrack;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 public class MonitorCameraActivity extends Activity {
@@ -42,6 +45,7 @@ public class MonitorCameraActivity extends Activity {
     private PeerConnectionFactory factory;
     public PeerConnection peerConnection;
     private EglBase rootEglBase;
+    private CheckBox motionCheckbox;
 
     private AudioTrack remoteAudioTrack;
     private VideoTrack remoteVideoTrack;
@@ -56,8 +60,20 @@ public class MonitorCameraActivity extends Activity {
         setContentView(R.layout.monitor_camera);
         remoteVideo = findViewById(R.id.surface_view_remote);
         switchCameraButton = findViewById(R.id.switch_camera);
+        motionCheckbox = findViewById(R.id.motionCheckbox);
 
         switchCameraButton.setOnClickListener(view -> switchCamera());
+
+
+        motionCheckbox.setOnCheckedChangeListener((compoundButton, b) -> {
+            if (dataChannel != null && dataChannel.state() == DataChannel.State.OPEN) {
+                String message = "enable_motion_detection";
+                if (!motionCheckbox.isChecked()) {
+                    message = "disable_motion_detection";
+                }
+                dataChannel.send(new DataChannel.Buffer(ByteBuffer.wrap(message.getBytes()), false));
+            }
+        });
 
         signalingServer = new MonitorSignalingServer(this);
         connectToSecurityCamera();
@@ -82,7 +98,8 @@ public class MonitorCameraActivity extends Activity {
             JSONObject tokenJSON = new JSONObject();
             try {
                 tokenJSON.put("token", FirebaseManager.getInstance().getToken());
-            } catch (JSONException ignored) { }
+            } catch (JSONException ignored) {
+            }
             signalingServer.sendMessageSync(tokenJSON.toString());
             doCall();
         }).start();
@@ -92,6 +109,7 @@ public class MonitorCameraActivity extends Activity {
         ArrayList<PeerConnection.IceServer> iceServers = new ArrayList<>();
         String URL = "stun:stun.l.google.com:19302";
         iceServers.add(PeerConnection.IceServer.builder(URL).createIceServer());
+       // iceServers.add(PeerConnection.IceServer.builder("turn:numb.viagenie.ca:3478").setUsername("kengur1111@gmail.com").setPassword("kengur123").createIceServer());
         iceServers.add(PeerConnection.IceServer.builder("turn:3.10.164.245:3478").setUsername("camera").setPassword("camera123").createIceServer());
 
         PeerConnection.RTCConfiguration rtcConfig = new PeerConnection.RTCConfiguration(iceServers);
@@ -184,7 +202,30 @@ public class MonitorCameraActivity extends Activity {
 
     private void initializePeerConnections() {
         peerConnection = createPeerConnection(factory);
-        dataChannel = peerConnection.createDataChannel("remote_camera", new DataChannel.Init());
+        dataChannel = peerConnection.createDataChannel(System.currentTimeMillis() + "", new DataChannel.Init());
+        dataChannel.registerObserver(new DataChannel.Observer() {
+            @Override
+            public void onBufferedAmountChange(long l) {
+                Log.d("petja", "channel buffer change");
+            }
+
+            @Override
+            public void onStateChange() {
+                Log.d("petja", "channel state " + dataChannel.state());
+            }
+
+            @Override
+            public void onMessage(DataChannel.Buffer buffer) {
+                Log.d("petja", "channel message ");
+                String message = StandardCharsets.UTF_8.decode(buffer.data).toString();
+                Log.d("petja", "channel message " + message);
+                if(message.equals("enable_motion_detection")) {
+                    runOnUiThread(() -> motionCheckbox.setChecked(true));
+                } else if(message.equals("disable_motion_detection")) {
+                    runOnUiThread(() -> motionCheckbox.setChecked(false));
+                }
+            }
+        });
     }
 
     private void initializeSurfaceViews() {
@@ -238,6 +279,10 @@ public class MonitorCameraActivity extends Activity {
                 Log.d(TAG, "onCreateFailure: answer " + s);
             }
         }, new MediaConstraints());
+    }
+
+    public void setMotionCheckbox(boolean enabled) {
+        runOnUiThread(() -> motionCheckbox.setChecked(enabled));
     }
 
     public void doCall() {
